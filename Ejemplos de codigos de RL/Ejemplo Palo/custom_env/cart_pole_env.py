@@ -597,3 +597,13 @@ class CartPoleVectorEnv(VectorEnv):
             pygame.display.quit()
             pygame.quit()
             self.isopen = False
+
+
+
+# Registro del entorno
+from gymnasium.envs.registration import register
+
+register(
+    id='CartPoleEnv-v0',
+    entry_point='custom_env.cart_pole_env:CartPoleEnv',
+)
