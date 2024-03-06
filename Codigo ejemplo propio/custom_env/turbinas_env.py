@@ -81,9 +81,14 @@ class TurbinasEnv(gym.Env):
         super().reset(seed=seed)
 
         # Inicializar la velocidad y dirección del viento con valores aleatorios dentro de los rangos permitidos
+        
+        #Comento para hacer pruebas
         self.wind_speed = self.np_random.uniform(low=0, high=self.max_wind_speed)
-        #self.wind_speed=10
+        #self.wind_speed=25
+        
+        #Comento para hacer pruebas
         self.wind_direction = self.np_random.uniform(low=0, high=2*np.pi)
+        #self.wind_direction = 5.0
 
         # Inicializar la orientación de cada turbina con valores aleatorios o una orientación fija, dependiendo de la simulación
         self.turbine_orientations = self.np_random.uniform(low=0, high=2*np.pi, size=(self.num_turbines,))
@@ -108,14 +113,22 @@ class TurbinasEnv(gym.Env):
 
         # Simula el cambio en la velocidad del viento
         # Por ejemplo, puede variar aleatoriamente dentro de un rango determinado o puede tener una tendencia
+        
         wind_speed_change = self.np_random.uniform(-1, 1)  # Cambio de velocidad aleatorio entre -1 y 1 m/s
         self.wind_speed = np.clip(self.wind_speed + wind_speed_change, 0, self.max_wind_speed)
+
+        #Voy a poner el viento estatico a una velocidad
+
+        #self.wind_speed=25
+
+        #Cambio que no haya cambio en el aire
 
         # Simula el cambio en la dirección del viento
         # Este podría ser un cambio aleatorio o podría depender de algún otro factor
         wind_direction_change = self.np_random.uniform(-0.1, 0.1)  # Cambio de dirección aleatorio entre -0.1 y 0.1 radianes
         self.wind_direction = (self.wind_direction + wind_direction_change) % (2 * np.pi)
 
+        #self.wind_direction=5.0
 
         # Calcula la recompensa basada en la potencia total generada
         reward = self._calculate_total_reward()
