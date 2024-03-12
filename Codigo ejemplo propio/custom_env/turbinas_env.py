@@ -117,7 +117,7 @@ class TurbinasEnv(gym.Env):
         wind_speed_change = self.np_random.uniform(-1, 1)  # Cambio de velocidad aleatorio entre -1 y 1 m/s
         self.wind_speed = np.clip(self.wind_speed + wind_speed_change, 0, self.max_wind_speed)
 
-        #Voy a poner el viento estatico a una velocidad
+        #Voy a poner el viento estatico a una velocidad para pruebas
 
         #self.wind_speed=25
 
