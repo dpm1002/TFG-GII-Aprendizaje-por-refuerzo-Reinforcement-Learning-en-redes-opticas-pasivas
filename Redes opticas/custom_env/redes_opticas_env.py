@@ -60,15 +60,15 @@ class RedesOpticasEnv(gym.Env):
         return obs
     
     def _get_info(self):
-        # Calcula la suma total del ancho de banda asignado en el ciclo actual.
-        total_bandwidth_assigned = np.sum(self.band_onus)
+        # CALCULA LA MEDIA DE TODOS LOS ANCHOS DE BANDA EN EL CICLO ACTUAL.
+        total_mean_bandwidth_assigned = np.mean(self.band_onus)
         # Calcula la desviación promedio del ancho de banda asignado respecto al Balloc.
         average_deviation = np.mean(np.abs(self.band_onus - self.Balloc))
         # Calcula la capacidad restante del OLT.
-        remaining_OLT_capacity = self.OLT_capacity - total_bandwidth_assigned
+        remaining_OLT_capacity = self.OLT_capacity - total_mean_bandwidth_assigned
 
         info = {
-            'total_bandwidth_assigned': total_bandwidth_assigned,
+            'total_mean_bandwidth_assigned': total_mean_bandwidth_assigned,
             'average_deviation_from_Balloc': average_deviation,
             'remaining_OLT_capacity': remaining_OLT_capacity,
         }
@@ -76,69 +76,64 @@ class RedesOpticasEnv(gym.Env):
     
 
     def _calculate_reward(self):
-        # Calcula la diferencia absoluta entre el Balloc y el ancho de banda asignado a cada ONU.
-        deviation = np.abs(self.band_onus - self.Balloc)
-
-        # La recompensa es negativa y proporcional a la desviación total de Balloc.
-        # Esto significa que el agente es incentivado a minimizar la desviación.
-        reward = -np.sum(deviation)
+        # La recompensa es la suma del ancho de banda asignado a cada ONU.
+        # Esto incentivará al agente a aumentar el ancho de banda asignado.
+        reward = np.mean(self.band_onus)
 
         return reward
 
     def reset(self, seed=None, options=None):
+        # Puede ser útil llamar a super().reset() si estás heredando de una clase que ya implementa un método reset
+        # Sin embargo, si no es necesario, puedes omitirlo o comentarlo si super() no tiene un método reset
+        # super().reset(seed=seed)
 
-        #super().reset(seed=seed)
-
+        # Si decides establecer una semilla para la reproducibilidad (opcional)
         if seed is not None:
             np.random.seed(seed)
 
-        # Restablece las asignaciones de ancho de banda a un estado inicial, por ejemplo, a cero o a un valor base.
-        self.band_onus = np.zeros(self.num_onus, dtype=np.float32)
-        # Restablece las asignaciones de ancho de banda previas también.
-        self.previous_band_onus = np.zeros(self.num_onus, dtype=np.float32)
-        # Define la capacidad total del OLT para este nuevo episodio, si es fijo o puede variar.
-        self.OLT_capacity = self.Bmax * self.num_onus  # Ejemplo con capacidad máxima fija.
+        # Asignaciones de ancho de banda aleatorias iniciales o basadas en algún criterio
+        self.band_onus = np.random.uniform(low=0, high=self.Bmax, size=self.num_onus).astype(np.float32)
         
-        # Genera una nueva demanda de ancho de banda para cada ONU si tu modelo lo requiere.
-        # Esto puede depender de tu modelo específico y cómo quieres simular la variabilidad de la demanda.
-        # Por ejemplo, si deseas comenzar cada episodio con una demanda aleatoria dentro de cierto rango:
+        # Para las asignaciones de ancho de banda anteriores, puedes elegir mantenerlas en cero o darles un valor aleatorio
+        self.previous_band_onus = np.zeros(self.num_onus, dtype=np.float32)
+        
+        # Capacidad del OLT podría ser constante o podrías introducir alguna variabilidad
+        self.OLT_capacity = np.random.uniform(low=self.Bmax * 0.8, high=self.Bmax, size=1).astype(np.float32)
+        
+        # Demanda de ancho de banda que varía cada episodio
         self.demand = np.random.uniform(low=0, high=self.Bmax, size=self.num_onus).astype(np.float32)
 
-        # Puede que también quieras restablecer otras variables de estado aquí, dependiendo de tu modelo.
-
-        # Devuelve el estado inicial observado.
-
+        # Obtén el estado inicial y la información adicional
         observation = self._get_obs()
-        
         info = self._get_info()
 
+        # Devuelve el estado inicial observado y cualquier información adicional
         return observation, info
     
     def step(self, action):
-        # Actualizar las asignaciones de ancho de banda basadas en la acción tomada.
-        # La acción será un vector con las asignaciones de ancho de banda deseadas para cada ONU.
-        self.previous_band_onus = np.copy(self.band_onus)  # Guarda el estado anterior
-        self.band_onus = np.clip(action, 0, self.Bmax)  # Asegura que las asignaciones estén dentro de los límites
+        # Guarda el estado anterior
+        self.previous_band_onus = np.copy(self.band_onus)
+
+        # Asegura que las asignaciones estén dentro de los límites y puedan cambiar significativamente
+        self.band_onus += np.clip(action, -self.Bmax/10, self.Bmax/10)
+        self.band_onus = np.clip(self.band_onus, 0, self.Bmax)
         
-        # Calcular la recompensa basada en cuán cerca están las asignaciones del Balloc
+        # Recompensa basada en la desviación de Balloc
         reward = self._calculate_reward()
 
-        # Actualizar el estado del entorno, como la demanda de cada ONU, si es aplicable.
-        # Esto podría incluir variaciones en la demanda basadas en un modelo estocástico o en patrones determinados.
-        # Por simplicidad, aquí solo simulamos un cambio aleatorio en la demanda.
-        self.demand = np.random.uniform(low=0, high=self.Bmax, size=self.num_onus).astype(np.float32)
-
-        # Determinar si el episodio ha terminado. En muchos entornos de redes, podría no haber
-        # un "final" claro hasta que se alcance un número determinado de pasos, o podrías definir
-        # condiciones específicas de terminación relacionadas con el rendimiento de la red.
-        done = False  # Aquí simplemente continuamos indefinidamente o hasta un límite de pasos (no mostrado)
+        # Simulación de la variabilidad en la demanda
+        demand_change = np.random.uniform(low=-10, high=10, size=self.num_onus)
+        self.demand = np.clip(self.demand + demand_change, 0, self.Bmax)
         
-        # Opcional: Puede que quieras incluir información adicional para el debugging o análisis.
+        # Determinación de si el episodio ha terminado
+        done = np.random.rand() > 0.99  # Ejemplo: termina el 1% de las veces al azar
+        
+        # Recopilación de información adicional para análisis
         info = self._get_info()
 
-        # Asegurarse de devolver la observación del nuevo estado, la recompensa, si el episodio ha terminado,
-        # y cualquier información adicional.
+        # Devolución de la observación, recompensa, finalización del episodio y cualquier información adicional
         return self._get_obs(), reward, done, False, info
+
 
 
 
