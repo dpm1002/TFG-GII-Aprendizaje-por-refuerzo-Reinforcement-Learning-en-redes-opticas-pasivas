@@ -26,7 +26,10 @@ class RedesOpticasEnv(gym.Env):
         # Ancho de banda que la red quiere dar a las onus
         self.Balloc = Balloc
 
-        # El espacio de observación podría incluir información sobre:
+        # Recompensa anterior
+        self.last_reward=None
+
+        # El espacio de observación incluye la información sobre:
         # - La demanda de ancho de banda actual de cada ONU
         # - El ancho de banda previamente asignado a cada ONU
         # - Información sobre la capacidad total del OLT
@@ -60,6 +63,8 @@ class RedesOpticasEnv(gym.Env):
         return obs
     
     def _get_info(self):
+        # Saca la informacion del ciclo actual del ancho de banda de las onus
+        band_onus=self.band_onus
         # CALCULA LA MEDIA DE TODOS LOS ANCHOS DE BANDA EN EL CICLO ACTUAL.
         total_mean_bandwidth_assigned = np.mean(self.band_onus)
         # Calcula la desviación promedio del ancho de banda asignado respecto al Balloc.
@@ -68,6 +73,7 @@ class RedesOpticasEnv(gym.Env):
         remaining_OLT_capacity = self.OLT_capacity - total_mean_bandwidth_assigned
 
         info = {
+            'band_onus': band_onus,
             'total_mean_bandwidth_assigned': total_mean_bandwidth_assigned,
             'average_deviation_from_Balloc': average_deviation,
             'remaining_OLT_capacity': remaining_OLT_capacity,
@@ -76,50 +82,57 @@ class RedesOpticasEnv(gym.Env):
     
 
     def _calculate_reward(self):
-        # La recompensa es la suma del ancho de banda asignado a cada ONU.
-        # Esto incentivará al agente a aumentar el ancho de banda asignado.
-        reward = np.mean(self.band_onus)
-
+        # Calcula la desviación media de la asignación de ancho de banda de cada ONU del valor objetivo Balloc.
+        average_deviation = np.mean(np.abs(self.band_onus - self.Balloc))
+        # La recompensa es inversamente proporcional a la desviación media.
+        # Penalizaciones más altas para desviaciones medias mayores.
+        # Esto significa que cuanto mayor sea la desviación promedio (cuanto peor sea el desempeño), más negativa será la recompensa. 
+        reward = -average_deviation
         return reward
 
     def reset(self, seed=None, options=None):
-        # Puede ser útil llamar a super().reset() si estás heredando de una clase que ya implementa un método reset
-        # Sin embargo, si no es necesario, puedes omitirlo o comentarlo si super() no tiene un método reset
-        # super().reset(seed=seed)
-
-        # Si decides establecer una semilla para la reproducibilidad (opcional)
+        # Esto es si establecemos una semilla determinada para la generacion
         if seed is not None:
             np.random.seed(seed)
 
-        # Asignaciones de ancho de banda aleatorias iniciales o basadas en algún criterio
+        # Asignaciones de ancho de banda aleatorias iniciales 
         self.band_onus = np.random.uniform(low=0, high=self.Bmax, size=self.num_onus).astype(np.float32)
         
-        # Para las asignaciones de ancho de banda anteriores, puedes elegir mantenerlas en cero o darles un valor aleatorio
+        # Para las asignaciones de ancho de banda anteriores las mantenemos a 0
         self.previous_band_onus = np.zeros(self.num_onus, dtype=np.float32)
         
-        # Capacidad del OLT podría ser constante o podrías introducir alguna variabilidad
+        # Capacidad del OLT la mantenemos uniforme
         self.OLT_capacity = np.random.uniform(low=self.Bmax * 0.8, high=self.Bmax, size=1).astype(np.float32)
         
         # Demanda de ancho de banda que varía cada episodio
         self.demand = np.random.uniform(low=0, high=self.Bmax, size=self.num_onus).astype(np.float32)
 
-        # Obtén el estado inicial y la información adicional
+        # Obtenemos el estado inicial y la información adicional
         observation = self._get_obs()
         info = self._get_info()
 
-        # Devuelve el estado inicial observado y cualquier información adicional
+        # Devolvemos el estado inicial observado y cualquier información adicional
         return observation, info
     
     def step(self, action):
-        # Guarda el estado anterior
+        # Guardamos el estado anterior de los valores del ancho de banda
         self.previous_band_onus = np.copy(self.band_onus)
 
-        # Asegura que las asignaciones estén dentro de los límites y puedan cambiar significativamente
+        # Aseguramos que las asignaciones estén dentro de los límites y puedan cambiar significativamente
         self.band_onus += np.clip(action, -self.Bmax/10, self.Bmax/10)
         self.band_onus = np.clip(self.band_onus, 0, self.Bmax)
         
         # Recompensa basada en la desviación de Balloc
         reward = self._calculate_reward()
+
+        # Ponemos condiciones al reward para que estimule la mejora.
+        if self.last_reward is not None and reward < -self.last_reward:
+            # Este ajuste es un ejemplo y podría no ser la mejor solución
+            adjustment = np.random.uniform(0, 20)
+            self.band_onus = np.where(self.band_onus < self.Balloc, self.band_onus + adjustment, self.band_onus - adjustment)
+            self.band_onus = np.clip(self.band_onus, 0, self.Bmax)
+            
+        self.last_reward = reward
 
         # Simulación de la variabilidad en la demanda
         demand_change = np.random.uniform(low=-10, high=10, size=self.num_onus)
