@@ -27,7 +27,7 @@ jobs:
       - name: Run tests
         run: |
           # Aquí irían los comandos para ejecutar tus pruebas, por ejemplo:
-          pytest
+          # pytest algo
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
