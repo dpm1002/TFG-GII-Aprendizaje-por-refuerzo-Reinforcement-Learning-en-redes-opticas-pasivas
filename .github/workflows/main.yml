@@ -1,23 +1,37 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
 jobs:
-  sonarcloud:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: Set up JDK 11
-      uses: actions/setup-java@v2
-      with:
-        java-version: '11'
-        distribution: 'adopt'
-    - name: Set up Python 3.x
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x' # Reemplaza '3.x' con tu versión específica de Python
-    - name: SonarCloud Scan
-      uses: SonarSource/sonarcloud-github-action@master
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        # Añade la versión de Python aquí como variable de entorno
-        SONAR_PYTHON_VERSION: '3.x' # Reemplaza '3.x' con tu versión específica de Python
+      - uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8' # Reemplaza esto con la versión de Python que estés utilizando.
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt # Asegúrate de que tienes un archivo requirements.txt en tu repo.
+
+      - name: Run tests
+        run: |
+          # Aquí irían los comandos para ejecutar tus pruebas, por ejemplo:
+          pytest
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Este token está provisto automáticamente por GitHub.
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Asegúrate de haber configurado SONAR_TOKEN en tus secrets de GitHub.
