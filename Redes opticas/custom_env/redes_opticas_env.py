@@ -7,7 +7,7 @@ class RedesOpticasEnv(gym.Env):
     """
     Entorno personalizado para controlar un entorno de redes opticas por refuerzo.
     El valor que intentaremos maximizar es el de que todas las ONUs se acerquen al valor
-    de el BAlloc(ancho de banda que dictaminemos).
+    de el BGarantizado(ancho de banda que dictaminemos).
     """
 
     """
@@ -18,13 +18,13 @@ class RedesOpticasEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, num_onus=10, Bmax=1000, Balloc=500):
+    def __init__(self, render_mode=None, num_onus=10, Bmax=1000, BGarantizado=500):
         # Número de onus de la red
         self.num_onus = num_onus
         # Ancho de banda maximo de la red
         self.Bmax = Bmax
         # Ancho de banda que la red quiere dar a las onus
-        self.Balloc = Balloc
+        self.BGarantizado = BGarantizado
 
         # Recompensa anterior
         self.last_reward=None
@@ -67,23 +67,23 @@ class RedesOpticasEnv(gym.Env):
         band_onus=self.band_onus
         # CALCULA LA MEDIA DE TODOS LOS ANCHOS DE BANDA EN EL CICLO ACTUAL.
         total_mean_bandwidth_assigned = np.mean(self.band_onus)
-        # Calcula la desviación promedio del ancho de banda asignado respecto al Balloc.
-        average_deviation = np.mean(np.abs(self.band_onus - self.Balloc))
+        # Calcula la desviación promedio del ancho de banda asignado respecto al BGarantizado.
+        average_deviation = np.mean(np.abs(self.band_onus - self.BGarantizado))
         # Calcula la capacidad restante del OLT.
         remaining_OLT_capacity = self.OLT_capacity - total_mean_bandwidth_assigned
 
         info = {
             'band_onus': band_onus,
             'total_mean_bandwidth_assigned': total_mean_bandwidth_assigned,
-            'average_deviation_from_Balloc': average_deviation,
+            'average_deviation_from_BGarantizado': average_deviation,
             'remaining_OLT_capacity': remaining_OLT_capacity,
         }
         return info
     
 
     def _calculate_reward(self):
-        # Calcula la desviación media de la asignación de ancho de banda de cada ONU del valor objetivo Balloc.
-        average_deviation = np.mean(np.abs(self.band_onus - self.Balloc))
+        # Calcula la desviación media de la asignación de ancho de banda de cada ONU del valor objetivo BGarantizado.
+        average_deviation = np.mean(np.abs(self.band_onus - self.BGarantizado))
         # La recompensa es inversamente proporcional a la desviación media.
         # Penalizaciones más altas para desviaciones medias mayores.
         # Esto significa que cuanto mayor sea la desviación promedio (cuanto peor sea el desempeño), más negativa será la recompensa. 
@@ -122,14 +122,14 @@ class RedesOpticasEnv(gym.Env):
         self.band_onus += np.clip(action, -self.Bmax/10, self.Bmax/10)
         self.band_onus = np.clip(self.band_onus, 0, self.Bmax)
         
-        # Recompensa basada en la desviación de Balloc
+        # Recompensa basada en la desviación de BGarantizado
         reward = self._calculate_reward()
 
         # Ponemos condiciones al reward para que estimule la mejora.
         if self.last_reward is not None and reward < -self.last_reward:
             # Este ajuste es un ejemplo y podría no ser la mejor solución
             adjustment = np.random.uniform(0, 20)
-            self.band_onus = np.where(self.band_onus < self.Balloc, self.band_onus + adjustment, self.band_onus - adjustment)
+            self.band_onus = np.where(self.band_onus < self.BGarantizado, self.band_onus + adjustment, self.band_onus - adjustment)
             self.band_onus = np.clip(self.band_onus, 0, self.Bmax)
             
         self.last_reward = reward
@@ -146,8 +146,6 @@ class RedesOpticasEnv(gym.Env):
 
         # Devolución de la observación, recompensa, finalización del episodio y cualquier información adicional
         return self._get_obs(), reward, done, False, info
-
-
 
 
 from gymnasium.envs.registration import register
