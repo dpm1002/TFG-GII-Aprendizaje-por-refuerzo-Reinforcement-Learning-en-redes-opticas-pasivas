@@ -1,0 +1,36 @@
+name: CI Build
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.8' # Reemplaza esto con la versión de Python que estés utilizando.
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+      - name: Run tests
+        run: |
+          # Aquí irían los comandos para ejecutar tus pruebas, por ejemplo:
+          # pytest algo
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Este token está provisto automáticamente por GitHub.
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # Asegúrate de haber configurado SONAR_TOKEN en tus secrets de GitHub.
