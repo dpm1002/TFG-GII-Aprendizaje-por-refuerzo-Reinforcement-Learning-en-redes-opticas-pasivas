@@ -3,7 +3,10 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 
+import time
+
 from scipy.stats import pareto
+from scipy.stats import beta as beta_dist
 
 class RedesOpticasEnv(gym.Env):
 
@@ -18,6 +21,9 @@ class RedesOpticasEnv(gym.Env):
     def __init__(self, render_mode=None, num_ont=3, Vt=10e6):
         #Numero de ONTs de la red
         self.num_ont=num_ont
+
+        #Velocidad maxima de la red
+        self.Vt=Vt
 
         #Tiempo de cada ciclo: 2ms
         self.temp_ciclo=0.002
@@ -36,66 +42,181 @@ class RedesOpticasEnv(gym.Env):
         #Registro de los estados de ON y OFF
         self.on_off_state=False
 
+        # Registros de tiempo
+        self.step_durations = []
+
+        self.trafico_entrada=[]
+
+        self.trafico_pareto_futuro=[]
+
+        self.trafico_salida=[]
+
+        self.trafico_pareto_actual=[]
+        
+
+        self.tamano_cola=0
+
         # Inicialización del estado
         self.state = None
         self.reset()
 
     def _get_obs(self):
         # Asegurar que el estado siempre está dentro de los límites definidos por el espacio de observaciones
-        obs = np.clip(self.state, 0, self.OLT_Capacity)
-        return obs
+        obs = np.clip(self.trafico_entrada, 0, self.OLT_Capacity)
+        return np.squeeze(obs)
     
     def _get_info(self):
 
         info={
             'OLT_Capacity':self.OLT_Capacity,
-            'band_onts':self.state,
-            'on_off_states':self.on_off_state
+            'trafico_entrada':self.trafico_entrada,
+            'trafico_salida':self.trafico_salida,
+            'trafico_IN_ON_actual':self.trafico_pareto_actual,
+            'trafico_IN_ON_futuro':self.trafico_pareto_futuro,
+            'tamano_cola':self.tamano_cola
         }
 
         return info
 
+    def calculate_pareto(self, num_ont=5, traf_pas=[]):
+        # Parámetros de la distribución de Pareto
+        alpha_ON = 2  # Parámetro de forma (alfa)
+        alpha_OFF = 1  # Parámetro de forma (alfa)
+        #Vel_tx_max = 2e9 # 2 Gbps de velocidad de transmisión máxima
+        Vel_tx_max=self.Vt
+
+        # Guardamos los valores de los bits de cada ont en esta lista para la cola de la ont
+        trafico_futuro_valores=[]
+
+        lista_trafico_act=[]
+
+        trafico_actual_lista=[[] for i in range(self.num_ont)]
+
+        for i in range(num_ont):
+            #print(i)
+            # Generar valores aleatorios de la distribución de Pareto para cada ont
+            # Para cada ont, generamos 'num_samples' valores
+            #De momento solo creo una ont
+            if(traf_pas == []):
+                trafico_pareto = list(np.random.pareto(alpha_ON, size=(1)))
+                trafico_pareto = trafico_pareto+(list(np.random.pareto(alpha_OFF, size=(1))))
+                trafico_pareto = list(trafico_pareto)
+            else:
+                trafico_pareto = traf_pas[i]
+
+            #print(trafico_pareto)
+
+            suma=sum(trafico_pareto)
+            #print(suma)
+            #Debe de ser menor a 2 milisegundos
+            while(suma<2):
+                trafico_pareto=trafico_pareto+(list(np.random.pareto(alpha_ON, size=(1))))+(list(np.random.pareto(alpha_OFF, size=(1))))
+                #print(trafico_pareto)
+                suma=sum(trafico_pareto)
+                #print(suma)
+
+            traf_act=[]
+            suma=0
+            while(suma<2):
+                traf_act.append(trafico_pareto.pop(0))
+                suma=sum(traf_act)
+
+                #print(traf_act)
+                #print(suma)  
+            traf_fut=[0, 0]
+            if(len(traf_act)%2==0):
+                traf_fut[0]=0
+                traf_fut[1]=suma-2
+                traf_act[-1]=traf_act[-1]-traf_fut[1]
+            else:
+                traf_fut[0]=suma-2
+                traf_fut[1]=trafico_pareto[-1]              
+                traf_act[-1]=traf_act[-1]-traf_fut[0]
+
+            trafico_actual_lista[i].append(traf_act)    
+                #print(traf_fut)
+            vol_traf_act=sum(traf_act[::2])*Vel_tx_max*self.temp_ciclo
+
+            lista_trafico_act.append(vol_traf_act)
+            trafico_futuro_valores.append(traf_fut)
+            #print(vol_traf_act)
+            #print(traf_act)
+
+        return lista_trafico_act, trafico_actual_lista, trafico_futuro_valores
+
+    def _calculate_reward(self):
+
+        aux_tamano_cola=0
+        cont=0
+        #print(self.trafico_entrada[cont])
+        while aux_tamano_cola<self.OLT_Capacity:
+        
+            aux_tamano_cola+=self.trafico_entrada[cont]-self.trafico_salida[cont]
+            cont+=1
+            if cont==self.num_ont:
+                break
+
+        tamano_cola=np.abs(aux_tamano_cola)
+        #tamano_cola=aux_tamano_cola
+
+        #Cuanto menor sea el valor, menos diferencia de trafico de entrada y trafico de salida
+        reward = -tamano_cola
+
+        return reward
+
     def step(self, action):
-        is_on = np.random.choice([1, 0], p=[0.5, 0.5], size=self.num_ont)  # 1 para ON, 0 para OFF
-        self.on_off_state = is_on  # Guardar el estado actual ON/OFF
+        start_time = time.time()  # Iniciar el contador de tiempo
 
-        # Base de variación de tráfico
-        base_traffic_variation = pareto.rvs(1.5, size=self.num_ont) * self.OLT_Capacity / 100
-        
-        # Genera un pico de variación de tráfico con cierta probabilidad, esto es para valores mas realistas
-        peak_trigger = np.random.rand()  # Valor entre 0 y 1
-        peak_factor = 10 if peak_trigger > 0.75 else 1  # Pico aleatorio (10x) si el valor es mayor a 0.75
+        #CALCULO DE LA COLA DE BITS DE ANCHO DE BANDA DE ENTRADA, TRAFICO DE ENTRADA DE PARETO ON Y OFF; PARA CADA ONT EN ESTE CICLO
+        self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro=self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
 
-        # Calcula la variación de tráfico con la posibilidad de un pico
-        traffic_variation = is_on * base_traffic_variation * peak_factor  # Pico si el trigger es alto
-        
-        # Actualiza el estado con la variación de tráfico, considerando el pico
-        self.state = np.clip(self.state + action + traffic_variation, 0, self.OLT_Capacity)
-        
-        # Recompensa para mantener el tráfico bajo control, la basamos en que el trafico este regulado a un mismo ancho de banda.
-        reward = -np.sum(self.state)
+        #print(f"El trafico actual es: {self.trafico_pareto_actual}")
+        #print(f"El trafico futuro es: {self.trafico_pareto_futuro}")
 
-        # Ajusta el estado si excede la capacidad del OLT
-        while np.sum(self.state) > self.OLT_Capacity:
-            self.state = self.state * (self.OLT_Capacity / np.sum(self.state))
+        #Aplicamos la accion a la variable que deberá de aprender
+        self.trafico_salida += np.clip(action, 0, self.OLT_Capacity)
+
+        aux_tamano_cola=0
+        cont=0
+        #print(self.trafico_entrada[cont])
+        while aux_tamano_cola<self.OLT_Capacity:
         
+            aux_tamano_cola+=self.trafico_entrada[cont]-self.trafico_salida[cont]
+            cont+=1
+            if cont==self.num_ont:
+                break
+
+        self.tamano_cola=aux_tamano_cola
+
+        reward=self._calculate_reward()
+
         # Determinación de si el episodio ha terminado
         done = np.random.rand() > 0.99
 
+        elapsed_time = time.time() - start_time
+        if elapsed_time < 0.002:
+            time.sleep(0.002 - elapsed_time)
+
+        end_time = time.time()  # Detener el contador de tiempo
+        step_duration = end_time - start_time  # Calcular la duración del paso
+        self.step_durations.append(step_duration)  # Guardar la duración en la lista
+
+        # Imprimimos la duracion del ciclo que deberia de ser 2 ms, con su pequeño error absoluto.
+        #print(f"Duración del paso: {step_duration*1000} milisegundos")
+
         # Información adicional
         info = self._get_info()
+
 
         return self._get_obs(), reward, done, False, info
         
 
     def reset(self,seed=None, options=None):
-        # Inicializa el estado usando una distribución de Pareto escalada a la capacidad máxima del OLT
-        # Inicializa el estado usando una distribución de Pareto
-        self.state = pareto.rvs(1.5, size=self.num_ont) * self.OLT_Capacity / 10
-        # Obtenemos el estado inicial y la información adicional
-        
-        self.on_off_state = np.zeros(self.num_ont)  # Resetear también el registro de ON/OFF
 
+        self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro=self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
+
+        self.trafico_salida = np.random.uniform(low=0, high=self.OLT_Capacity, size=self.num_ont).astype(np.float32)
+        
         #Definimos los valores de observacion y de info
         observation = self._get_obs()
         info = self._get_info()
@@ -104,7 +225,8 @@ class RedesOpticasEnv(gym.Env):
 
     def render(self, mode='human', close=False):
         if mode == 'human':
-            print(f"Estado actual del tráfico: {self.state}")
+            #print(f"Estado actual del tráfico: {self.state}")
+            pass
 
 from gymnasium.envs.registration import register
 
