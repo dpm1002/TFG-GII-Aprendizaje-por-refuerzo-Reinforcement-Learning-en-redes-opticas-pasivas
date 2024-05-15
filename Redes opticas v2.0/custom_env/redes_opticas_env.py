@@ -37,7 +37,7 @@ class RedesOpticasEnv(gym.Env):
 
         #Definimos el espacio de acciones, en nuestro caso es el numero de ONTs sobre las 
         #que trabajaremos
-        self.action_space = spaces.Box(low=-self.OLT_Capacity / 10, high=self.OLT_Capacity / 10, shape=(self.num_ont,), dtype=np.float32)
+        self.action_space = spaces.Box(low=-self.OLT_Capacity / 20, high=self.OLT_Capacity / 20, shape=(self.num_ont,), dtype=np.float32)
 
         #Registro de los estados de ON y OFF
         self.on_off_state=False
@@ -53,6 +53,7 @@ class RedesOpticasEnv(gym.Env):
 
         self.trafico_pareto_actual=[]
         
+        self.last_reward=0
 
         self.tamano_cola=0
 
@@ -145,68 +146,57 @@ class RedesOpticasEnv(gym.Env):
         return lista_trafico_act, trafico_actual_lista, trafico_futuro_valores
 
     def _calculate_reward(self):
-
-        aux_tamano_cola=0
-        cont=0
-        #print(self.trafico_entrada[cont])
-        while aux_tamano_cola<self.OLT_Capacity:
         
-            aux_tamano_cola+=self.trafico_entrada[cont]-self.trafico_salida[cont]
-            cont+=1
-            if cont==self.num_ont:
-                break
-
-        tamano_cola=np.abs(aux_tamano_cola)
-        #tamano_cola=aux_tamano_cola
-
-        #Cuanto menor sea el valor, menos diferencia de trafico de entrada y trafico de salida
-        reward = -tamano_cola
-
+        total_desviacion = np.sum(np.abs(self.trafico_entrada - self.trafico_salida))
+        reward = -total_desviacion
         return reward
 
     def step(self, action):
-        start_time = time.time()  # Iniciar el contador de tiempo
+        start_time = time.time()
 
-        #CALCULO DE LA COLA DE BITS DE ANCHO DE BANDA DE ENTRADA, TRAFICO DE ENTRADA DE PARETO ON Y OFF; PARA CADA ONT EN ESTE CICLO
-        self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro=self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
+        aux=False
 
-        #print(f"El trafico actual es: {self.trafico_pareto_actual}")
-        #print(f"El trafico futuro es: {self.trafico_pareto_futuro}")
+        while aux==False:
 
-        #Aplicamos la accion a la variable que deberá de aprender
-        self.trafico_salida += np.clip(action, 0, self.OLT_Capacity)
+            # Obtener el tráfico de entrada actual
+            self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
 
-        aux_tamano_cola=0
-        cont=0
-        #print(self.trafico_entrada[cont])
-        while aux_tamano_cola<self.OLT_Capacity:
+            # Aplicar la acción para ajustar el tráfico de salida hacia el tráfico de entrada
+            self.trafico_salida = np.clip(self.trafico_entrada + action, 0, self.OLT_Capacity)
+
+            # Cálculo del tamaño de la cola
+            aux_tamano_cola = np.sum(self.trafico_entrada - self.trafico_salida)
+
+            if aux_tamano_cola<=self.OLT_Capacity:
+                aux=True
         
-            aux_tamano_cola+=self.trafico_entrada[cont]-self.trafico_salida[cont]
-            cont+=1
-            if cont==self.num_ont:
-                break
+        
+        if aux_tamano_cola<0:
+            self.tamano_cola=0
+        else:
+            self.tamano_cola=aux_tamano_cola
+        # Calcular recompensa
+        reward = self._calculate_reward()
 
-        self.tamano_cola=aux_tamano_cola
+        # Ajustes basados en la recompensa
+        if self.last_reward is not None and reward < self.last_reward:
+            adjustment = np.random.uniform(0, 20)
+            self.trafico_salida = np.where(self.trafico_entrada == 0, 0, self.trafico_salida)
+            self.trafico_salida = np.where(self.trafico_entrada > self.trafico_salida, self.trafico_salida + adjustment, self.trafico_salida - adjustment)
+            self.trafico_salida = np.clip(self.trafico_salida, 0, self.OLT_Capacity)
 
-        reward=self._calculate_reward()
-
-        # Determinación de si el episodio ha terminado
+        self.last_reward = reward
         done = np.random.rand() > 0.99
 
         elapsed_time = time.time() - start_time
         if elapsed_time < 0.002:
             time.sleep(0.002 - elapsed_time)
 
-        end_time = time.time()  # Detener el contador de tiempo
-        step_duration = end_time - start_time  # Calcular la duración del paso
-        self.step_durations.append(step_duration)  # Guardar la duración en la lista
+        end_time = time.time()
+        step_duration = end_time - start_time
+        self.step_durations.append(step_duration)
 
-        # Imprimimos la duracion del ciclo que deberia de ser 2 ms, con su pequeño error absoluto.
-        #print(f"Duración del paso: {step_duration*1000} milisegundos")
-
-        # Información adicional
         info = self._get_info()
-
 
         return self._get_obs(), reward, done, False, info
         
