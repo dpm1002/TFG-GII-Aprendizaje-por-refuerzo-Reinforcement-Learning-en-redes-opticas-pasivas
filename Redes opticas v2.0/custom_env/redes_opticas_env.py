@@ -1,3 +1,4 @@
+
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
@@ -7,14 +8,19 @@ from scipy.stats import pareto
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, tamanoBuffer=20e6):
+    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, tamanoBuffer=20e6, Vt_contratada=10e6/10):
         self.num_ont = num_ont
         self.Vt = Vt  # bits por segundo (bps)
         self.tamanoBuffer = tamanoBuffer
         self.temp_ciclo = 0.002  # segundos (s)
         self.OLT_Capacity = Vt * self.temp_ciclo  # bits
-        self.observation_space = spaces.Box(low=0, high=self.OLT_Capacity, shape=(self.num_ont,), dtype=np.float32)
-        self.action_space = spaces.Box(low=-self.OLT_Capacity / 20, high=self.OLT_Capacity / 20, shape=(self.num_ont,), dtype=np.float32)
+        #Velocidad de transmision contratada, lo ponemos a 1/10 del Vt de la OLT inicialmente
+        self.velocidadContratada = Vt_contratada
+        #Maximo de bits que se pueden transmitir en un ciclo en cada ont por la limitacion de la velocidad contratada
+        self.Max_bits_ONT=self.velocidadContratada*self.temp_ciclo
+
+        self.observation_space = spaces.Box(low=0, high=self.Max_bits_ONT, shape=(self.num_ont,), dtype=np.float32)
+        self.action_space = spaces.Box(low=-self.Max_bits_ONT, high=self.Max_bits_ONT, shape=(self.num_ont,), dtype=np.float32)
 
         self.on_off_state = False
         self.step_durations = []
@@ -23,14 +29,15 @@ class RedesOpticasEnv(gym.Env):
         self.trafico_salida = []
         self.trafico_pareto_actual = []
         self.trafico_pendiente = np.zeros(self.num_ont)  # Inicializar el tráfico pendiente para cada ONT
+        self.trafico_pendiente_anterior= np.zeros(self.num_ont)
         self.last_reward = 0
         self.tamano_cola = 0  # Inicializar tamaño de la cola como una variable int/float
-        self.velocidadContratada = 0
+        
         self.state = None
         self.reset()
 
     def _get_obs(self):
-        obs = np.clip(self.trafico_entrada, 0, self.OLT_Capacity)
+        obs = np.clip(self.trafico_entrada, 0, self.OLT_Capacity) / self.Max_bits_ONT
         return np.squeeze(obs)
     
     def _get_info(self):
@@ -48,7 +55,7 @@ class RedesOpticasEnv(gym.Env):
     def calculate_pareto(self, num_ont=5, traf_pas=[]):
         alpha_ON = 2
         alpha_OFF = 1
-        Vel_tx_max = self.Vt
+        Vel_tx_max = self.Vt*0.1
         trafico_futuro_valores = []
         lista_trafico_act = []
         trafico_actual_lista = [[] for _ in range(self.num_ont)]
@@ -82,7 +89,7 @@ class RedesOpticasEnv(gym.Env):
                 traf_act[-1] -= traf_fut[0]
 
             trafico_actual_lista[i].append(traf_act)
-            vol_traf_act = sum(traf_act[::2]) * Vel_tx_max * self.temp_ciclo
+            vol_traf_act = sum(traf_act[::2]) * Vel_tx_max * 10e-3
             lista_trafico_act.append(vol_traf_act)
             trafico_futuro_valores.append(traf_fut)
 
@@ -90,42 +97,57 @@ class RedesOpticasEnv(gym.Env):
 
     def _calculate_reward(self):
         # Penalizar fuertemente el tamaño de la cola para mantenerlo lo más bajo posible
-        reward = -self.tamano_cola * 100
+        reward = -sum(self.trafico_pendiente)
         return reward
 
     def step(self, action):
+        # print(action)
         start_time = time.time()
 
         # Obtener el tráfico de entrada actual
         self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
 
-        # Considerar el tráfico pendiente en el cálculo del tráfico de salida
-        total_trafico = self.trafico_entrada + self.trafico_pendiente
-        self.trafico_salida = np.clip(total_trafico + action, 0, self.OLT_Capacity)
+        # Guardar el valor del tráfico pendiente del ciclo anterior
+        #trafico_pendiente_anterior = np.copy(self.trafico_pendiente)
 
-        # Introducir una pequeña variabilidad en el tráfico de salida
-        variabilidad = np.random.uniform(-0.05, 0.05, size=self.num_ont) * self.OLT_Capacity
-        self.trafico_salida += variabilidad
-        self.trafico_salida = np.clip(self.trafico_salida, 0, self.OLT_Capacity)
+        # Considerar el tráfico pendiente en el cálculo del tráfico de salida
+        self.trafico_salida = np.clip(action, 0, self.Max_bits_ONT)
+
+        # Calcular el tráfico no transmitido para cada ONT
+        
+        # Asegurar que si hay tráfico pendiente, se ajuste adecuadamente el tráfico de salida
+        for i in range(self.num_ont):
+            self.trafico_pendiente[i] +=  self.trafico_entrada[i] - self.trafico_salida[i]
+            if self.trafico_entrada==0:
+                pass
+                #print(f"Cuando el trafico de entrada es 0 el pendiente es: {self.trafico_pendiente}")
+            if self.trafico_pendiente[i] > 0:
+                # Asegurarse de que el tráfico de salida en el siguiente ciclo considera el tráfico pendiente
+                self.trafico_salida[i] = min(self.trafico_pendiente[i], self.Max_bits_ONT)
+                self.trafico_pendiente[i] -= self.trafico_salida[i]
+                # Asegurarse de que el tráfico pendiente no sea negativo
+                self.trafico_pendiente[i] = max(self.trafico_pendiente[i], 0)
+
 
         # Asegurarse de que la suma del tráfico de salida no supere la capacidad del OLT
         if np.sum(self.trafico_salida) > self.OLT_Capacity:
+            #print("Entra aqui")
             exceso = np.sum(self.trafico_salida) - self.OLT_Capacity
             self.trafico_salida -= (exceso / self.num_ont)  # Distribuir el exceso entre todas las ONTs
-            self.trafico_salida = np.clip(self.trafico_salida, 0, self.OLT_Capacity)
+            self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
 
-        # Calcular el tráfico no transmitido para cada ONT
-        self.trafico_pendiente = np.maximum(total_trafico - self.trafico_salida, 0)
+        #print(f"El trafico pendiente después del cambio es de: {self.trafico_pendiente}")
+        #print(f"El trafico de salida después del cambio es de bits es de: {self.trafico_salida}")
 
         # Cálculo del tamaño de la cola acumulada
-        self.tamano_cola += np.sum(self.trafico_pendiente)
+        self.tamano_cola = np.sum(self.trafico_pendiente)
 
         # Limitar el tamaño de la cola a la capacidad del Buffer
-        self.tamano_cola = min(self.tamano_cola, self.tamanoBuffer)
+        # self.tamano_cola = min(self.tamano_cola, self.tamanoBuffer)
 
         # Calcular recompensa
         reward = self._calculate_reward()
-
+        """
         # Acción correctiva para disminuir el tamaño de la cola
         if self.last_reward is not None and reward < self.last_reward:
             adjustment = np.random.uniform(0, 20, size=self.num_ont)
@@ -133,16 +155,19 @@ class RedesOpticasEnv(gym.Env):
 
             # Asegurarse de que la suma del tráfico de salida no supere la capacidad del OLT nuevamente
             if np.sum(self.trafico_salida) > self.OLT_Capacity:
-                exceso = np.sum(self.trafico_salida) - self.OLT_Capacity
+                exceso = np.sum(self.trafico_salida) - la.OLT_Capacity
                 self.trafico_salida -= (exceso / self.num_ont)
-                self.trafico_salida = np.clip(self.trafico_salida, 0, self.OLT_Capacity)
-
+                self.trafico_salida = np.clip(self.trafico_salida, 0, la.OLT_Capacity)
+        """
         self.last_reward = reward
+
         done = np.random.rand() > 0.99
 
+        """
         elapsed_time = time.time() - start_time
         if elapsed_time < 0.002:
             time.sleep(0.002 - elapsed_time)
+        """
 
         end_time = time.time()
         step_duration = end_time - start_time
@@ -152,9 +177,10 @@ class RedesOpticasEnv(gym.Env):
 
         return self._get_obs(), reward, done, False, info
 
+
     def reset(self, seed=None, options=None):
         self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
-        self.trafico_salida = np.random.uniform(low=0, high=self.OLT_Capacity, size=self.num_ont).astype(np.float32)
+        self.trafico_salida = np.random.uniform(low=self.Max_bits_ONT/10, high=self.Max_bits_ONT, size=self.num_ont).astype(np.float32)
         self.tamano_cola = 0  # Reiniciar el tamaño de la cola como una variable int/float
         self.trafico_pendiente = np.zeros(self.num_ont)  # Reiniciar el tráfico pendiente para cada ONT
         observation = self._get_obs()
