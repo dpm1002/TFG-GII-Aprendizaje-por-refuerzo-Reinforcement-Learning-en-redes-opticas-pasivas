@@ -103,8 +103,6 @@ class RedesOpticasEnv(gym.Env):
         # Considerar el tráfico pendiente en el cálculo del tráfico de salida
         self.trafico_salida = np.clip(action, 0, self.Max_bits_ONT)
 
-        # Calcular el tráfico no transmitido para cada ONT
-        
         # Asegurar que si hay tráfico pendiente, se ajuste adecuadamente el tráfico de salida
         for i in range(self.num_ont):
             self.trafico_pendiente[i] +=  self.trafico_entrada[i] - self.trafico_salida[i]
@@ -116,7 +114,7 @@ class RedesOpticasEnv(gym.Env):
                 self.trafico_salida[i] = min(self.trafico_pendiente[i], self.Max_bits_ONT)
                 self.trafico_pendiente[i] -= self.trafico_salida[i]
                 # Asegurarse de que el tráfico pendiente no sea negativo
-                self.trafico_pendiente[i] = max(self.trafico_pendiente[i], 0)
+                #self.trafico_pendiente[i] = max(self.trafico_pendiente[i], 0)
 
 
         # Asegurarse de que la suma del tráfico de salida no supere la capacidad del OLT
@@ -149,7 +147,7 @@ class RedesOpticasEnv(gym.Env):
     def reset(self, seed=None, options=None):
         self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
         self.trafico_salida = np.random.uniform(low=self.Max_bits_ONT/10, high=self.Max_bits_ONT, size=self.num_ont).astype(np.float32)
-        self.trafico_pendiente = np.zeros(self.num_ont)  # Reiniciar el tráfico pendiente para cada ONT
+        
         observation = self._get_obs()
         info = self._get_info()
         return observation, info
