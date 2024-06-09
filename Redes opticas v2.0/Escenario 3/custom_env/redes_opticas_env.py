@@ -170,6 +170,13 @@ class RedesOpticasEnv(gym.Env):
         self.trafico_salida = np.random.uniform(low=self.Max_bits_ONT/10, high=self.Max_bits_ONT, size=self.num_ont).astype(np.float32)
         
         self.velocidadContratadaAuxiliar=self.velocidadContratada
+
+        #Maximo de bits que se pueden transmitir en un ciclo en cada ont por la limitacion de la velocidad contratada
+        self.Max_bits_ONT=self.velocidadContratadaAuxiliar*self.temp_ciclo
+
+        self.observation_space = spaces.Box(low=0, high=self.Max_bits_ONT, shape=(self.num_ont,), dtype=np.float32)
+        self.action_space = spaces.Box(low=-self.Max_bits_ONT, high=self.Max_bits_ONT, shape=(self.num_ont,), dtype=np.float32)
+
         #Variable propia de este escenario donde se cambia el funcionamiento del algoritmo
         self.instantes=0
 
