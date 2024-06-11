@@ -8,7 +8,7 @@ from scipy.stats import pareto
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, Vt_contratada=10e6/10):
+    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, Vt_contratada=10e6/10, lista_resultado=[]):
         self.num_ont = num_ont #numero de ont(unidades opticas)
         self.Vt = Vt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
@@ -27,6 +27,11 @@ class RedesOpticasEnv(gym.Env):
         self.trafico_salida = []   #Guardar el trafico de salida en cada ont
         self.trafico_pareto_actual = []  #Guardar el trafico pareto actual
         self.trafico_pendiente = np.zeros(self.num_ont)  # Inicializar el tráfico pendiente para cada ONT
+
+        #Definiremos los valores de ON Y DE OFF
+
+        #Para la variable de ON determinaremos un valor para cada ont
+        self.on=lista_resultado
         
         self.state = None
         self.reset()
@@ -46,7 +51,7 @@ class RedesOpticasEnv(gym.Env):
         return info
 
     def calculate_pareto(self, num_ont=5, traf_pas=[]):
-        alpha_ON = 1.4
+        alpha_ON = [1/x for x in self.on]
         alpha_OFF = 1.2
         Vel_tx_max = self.Vt*0.1
         trafico_futuro_valores = []
@@ -55,14 +60,17 @@ class RedesOpticasEnv(gym.Env):
 
         for i in range(num_ont):
             if not traf_pas:
-                trafico_pareto = list(np.random.pareto(alpha_ON, size=(1)))
+                alpha_on_value = alpha_ON[i % len(alpha_ON)]
+                print(alpha_on_value)
+                trafico_pareto = list(np.random.pareto(alpha_on_value, size=(1)))
                 trafico_pareto += list(np.random.pareto(alpha_OFF, size=(1)))
             else:
                 trafico_pareto = traf_pas[i]
 
             suma = sum(trafico_pareto)
             while suma < 2:
-                trafico_pareto += list(np.random.pareto(alpha_ON, size=(1))) + list(np.random.pareto(alpha_OFF, size=(1)))
+                alpha_on_value = alpha_ON[i % len(alpha_ON)]
+                trafico_pareto += list(np.random.pareto(alpha_on_value, size=(1))) + list(np.random.pareto(alpha_OFF, size=(1)))
                 suma = sum(trafico_pareto)
 
             traf_act = []
@@ -78,7 +86,7 @@ class RedesOpticasEnv(gym.Env):
                 traf_act[-1] -= traf_fut[1]
             else:
                 traf_fut[0] = suma - 2
-                traf_fut[1] = trafico_pareto[-1]
+                traf_fut[1] = trafico_pareto[-1] if trafico_pareto else 0
                 traf_act[-1] -= traf_fut[0]
 
             trafico_actual_lista[i].append(traf_act)
@@ -122,7 +130,7 @@ class RedesOpticasEnv(gym.Env):
             #print("Entra aqui")
             exceso = np.sum(self.trafico_salida) - self.OLT_Capacity
             self.trafico_salida -= (exceso / self.num_ont)  # Distribuir el exceso entre todas las ONTs
-            self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
+            #self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
 
         # Calcular recompensa
         reward = self._calculate_reward()

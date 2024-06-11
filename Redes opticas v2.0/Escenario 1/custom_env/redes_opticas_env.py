@@ -122,7 +122,7 @@ class RedesOpticasEnv(gym.Env):
             #print("Entra aqui")
             exceso = np.sum(self.trafico_salida) - self.OLT_Capacity
             self.trafico_salida -= (exceso / self.num_ont)  # Distribuir el exceso entre todas las ONTs
-            self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
+            #self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
 
         # Calcular recompensa
         reward = self._calculate_reward()

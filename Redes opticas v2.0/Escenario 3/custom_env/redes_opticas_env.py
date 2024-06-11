@@ -9,7 +9,7 @@ import random
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, Vt_contratada=10e6/10):
+    def __init__(self, render_mode=None, num_ont=3, Vt=10e6, Vt_contratada=10e6/10, n_ciclos=200):
         self.num_ont = num_ont #numero de ont(unidades opticas)
         self.Vt = Vt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
@@ -33,7 +33,10 @@ class RedesOpticasEnv(gym.Env):
 
         #Variable propia de este escenario donde se cambia el funcionamiento del algoritmo
         self.instantes=0
-        
+
+        #Variable con la que decimos el numero de ciclos del algoritmo
+        self.n_ciclos=n_ciclos-1
+
         self.state = None
         self.reset()
 
@@ -106,7 +109,7 @@ class RedesOpticasEnv(gym.Env):
         if self.instantes==100:
             a=self.velocidadContratadaAuxiliar/1000
             print(f"El valor al que se inicializa la velocidad Contratada inicial es de: {a}")
-            self.velocidadContratadaAuxiliar=random.randint(10e4, self.Vt)
+            self.velocidadContratadaAuxiliar=4000000000
             print(f"El valor al que se inicializa la velocidad Contratada despues del cambio es de: {self.velocidadContratadaAuxiliar/1000}")
             self.Max_bits_ONT=self.velocidadContratadaAuxiliar*self.temp_ciclo
             #self.observation_space = spaces.Box(low=0, high=self.Max_bits_ONT, shape=(self.num_ont,), dtype=np.float32)
@@ -145,7 +148,12 @@ class RedesOpticasEnv(gym.Env):
         # Calcular recompensa
         reward = self._calculate_reward()
 
-        done = np.random.rand() > 0.99
+        #done = np.random.rand() > 0.99
+
+        if self.instantes==self.n_ciclos:
+            done=True
+        else:
+            done=False
 
         self.instantes+=1
         print(f"Los instantes son de: {self.instantes}")
