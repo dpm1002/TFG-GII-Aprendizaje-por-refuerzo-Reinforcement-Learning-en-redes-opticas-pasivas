@@ -48,7 +48,7 @@ class RedesOpticasEnv(gym.Env):
     def calculate_pareto(self, num_ont=5, traf_pas=[]):
         alpha_ON = 1.4
         alpha_OFF = 1.2
-        Vel_tx_max = self.Vt*0.1
+        Vel_tx_max = self.Vt*0.01
         trafico_futuro_valores = []
         lista_trafico_act = []
         trafico_actual_lista = [[] for _ in range(self.num_ont)]
