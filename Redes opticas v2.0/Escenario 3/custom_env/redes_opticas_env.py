@@ -9,11 +9,11 @@ import random
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     
-    def __init__(self, render_mode=None, num_ont=3, vMaxOLT=10e6, vt_contratada=10e6/10, n_ciclos=200):
+    def __init__(self, render_mode=None, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, n_ciclos=200):
         self.num_ont = num_ont #numero de ont(unidades opticas)
-        self.vMaxOLT = vMaxOLT  # bits por segundo (bps)
+        self.v_max_olt = v_max_olt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
-        self.OLT_Capacity = vMaxOLT * self.temp_ciclo  # bits
+        self.OLT_Capacity = v_max_olt * self.temp_ciclo  # bits
         #Velocidad de transmision contratada, lo ponemos a 1/10 del Vt de la OLT inicialmente
         self.velocidadContratada = vt_contratada
         #Velocidad de transmision contratada auxiliar
@@ -59,7 +59,7 @@ class RedesOpticasEnv(gym.Env):
     def calculate_pareto(self, num_ont=5, traf_pas=[]):
         alpha_on = 1.4
         alpha_off = 1.2
-        vel_tx_max = self.vMaxOLT*0.01
+        vel_tx_max = self.v_max_olt*0.01
         trafico_futuro_valores = []
         lista_trafico_act = []
         trafico_actual_lista = [[] for _ in range(self.num_ont)]
@@ -167,6 +167,8 @@ class RedesOpticasEnv(gym.Env):
         self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
         self.trafico_salida = self.rng.uniform(low=self.Max_bits_ONT/10, high=self.Max_bits_ONT, size=self.num_ont).astype(np.float32)
         
+        self.trafico_pendiente = np.zeros(self.num_ont)  # Inicializar el tráfico pendiente para cada ONT
+
         self.velocidadContratadaAuxiliar=self.velocidadContratada
 
         #Maximo de bits que se pueden transmitir en un ciclo en cada ont por la limitacion de la velocidad contratada
@@ -183,10 +185,6 @@ class RedesOpticasEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
         return observation, info
-
-    def render(self, mode='human', close=False):
-        if mode == 'human':
-            pass
 
 from gymnasium.envs.registration import register
 

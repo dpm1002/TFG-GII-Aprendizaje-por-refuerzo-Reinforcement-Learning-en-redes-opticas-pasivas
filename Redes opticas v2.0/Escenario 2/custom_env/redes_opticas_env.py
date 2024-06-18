@@ -8,12 +8,12 @@ from scipy.stats import pareto
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, num_ont=3, vMaxOLT=10e6, vt_contratada=10e6/10, lista_resultado=None):
+    def __init__(self, render_mode=None, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, lista_resultado=None, n_ciclos=200):
         self.num_ont = num_ont #numero de ont(unidades opticas)
-        self.vMaxOLT = vMaxOLT  # bits por segundo (bps)
+        self.v_max_olt = v_max_olt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
-        self.OLT_Capacity = vMaxOLT * self.temp_ciclo  # bits
-        #Velocidad de transmision contratada, lo ponemos a 1/10 del vMaxOLT de la OLT inicialmente
+        self.OLT_Capacity = v_max_olt * self.temp_ciclo  # bits
+        #Velocidad de transmision contratada, lo ponemos a 1/10 del v_max_olt de la OLT inicialmente
         self.velocidadContratada = vt_contratada
         #Maximo de bits que se pueden transmitir en un ciclo en cada ont por la limitacion de la velocidad contratada
         self.Max_bits_ONT=self.velocidadContratada*self.temp_ciclo
@@ -35,6 +35,12 @@ class RedesOpticasEnv(gym.Env):
         
         self.rng = np.random.default_rng()  # Inicializa el generador de números aleatorios
 
+        #Variable propia de este escenario donde se cambia el funcionamiento del algoritmo
+        self.instantes=0
+
+        #Variable con la que decimos el numero de ciclos del algoritmo
+        self.n_ciclos=n_ciclos-1
+
         self.state = None
         self.reset()
 
@@ -55,7 +61,7 @@ class RedesOpticasEnv(gym.Env):
     def calculate_pareto(self, num_ont=5, traf_pas=[]):
         alpha_on = [1/x for x in self.on]
         alpha_off = 1.2
-        vel_tx_max = self.vMaxOLT*0.01
+        vel_tx_max = self.v_max_olt*0.01
         trafico_futuro_valores = []
         lista_trafico_act = []
         trafico_actual_lista = [[] for _ in range(self.num_ont)]
@@ -131,7 +137,12 @@ class RedesOpticasEnv(gym.Env):
         # Calcular recompensa
         reward = self._calculate_reward()
 
-        done = np.random.rand() > 0.99
+        if self.instantes==self.n_ciclos:
+            done=True
+        else:
+            done=False
+
+        self.instantes+=1
 
         """
         elapsed_time = time.time() - start_time
@@ -151,6 +162,8 @@ class RedesOpticasEnv(gym.Env):
     def reset(self, seed=None, options=None):
         self.trafico_entrada, self.trafico_pareto_actual, self.trafico_pareto_futuro = self.calculate_pareto(self.num_ont, self.trafico_pareto_futuro)
         self.trafico_salida = self.rng.uniform(low=self.Max_bits_ONT/10, high=self.Max_bits_ONT, size=self.num_ont).astype(np.float32)
+
+        self.trafico_pendiente = np.zeros(self.num_ont)  # Inicializar el tráfico pendiente para cada ONT
         
         self.rng = np.random.default_rng(seed)
 

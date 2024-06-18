@@ -82,13 +82,9 @@ class TurbinasEnv(gym.Env):
 
         # Inicializar la velocidad y dirección del viento con valores aleatorios dentro de los rangos permitidos
         
-        #Comento para hacer pruebas
         self.wind_speed = self.np_random.uniform(low=0, high=self.max_wind_speed)
-        #self.wind_speed=25
         
-        #Comento para hacer pruebas
         self.wind_direction = self.np_random.uniform(low=0, high=2*np.pi)
-        #self.wind_direction = 5.0
 
         # Inicializar la orientación de cada turbina con valores aleatorios o una orientación fija, dependiendo de la simulación
         self.turbine_orientations = self.np_random.uniform(low=0, high=2*np.pi, size=(self.num_turbines,))
@@ -98,10 +94,6 @@ class TurbinasEnv(gym.Env):
 
         # Si es necesario, obtener información adicional (puede ser útil para debugging o aprendizaje)
         info = self._get_info()
-
-        # Si el modo de renderizado está activo, renderizar el entorno
-        #if self.render_mode == "human":
-            #self.render()
 
         return observation, info
 
@@ -117,18 +109,10 @@ class TurbinasEnv(gym.Env):
         wind_speed_change = self.np_random.uniform(-1, 1)  # Cambio de velocidad aleatorio entre -1 y 1 m/s
         self.wind_speed = np.clip(self.wind_speed + wind_speed_change, 0, self.max_wind_speed)
 
-        #Voy a poner el viento estatico a una velocidad para pruebas
-
-        #self.wind_speed=25
-
-        #Cambio que no haya cambio en el aire
-
         # Simula el cambio en la dirección del viento
         # Este podría ser un cambio aleatorio o podría depender de algún otro factor
         wind_direction_change = self.np_random.uniform(-0.1, 0.1)  # Cambio de dirección aleatorio entre -0.1 y 0.1 radianes
         self.wind_direction = (self.wind_direction + wind_direction_change) % (2 * np.pi)
-
-        #self.wind_direction=5.0
 
         # Calcula la recompensa basada en la potencia total generada
         reward = self._calculate_total_reward()
@@ -141,10 +125,6 @@ class TurbinasEnv(gym.Env):
 
         # En un entorno real, podrías tener una condición de terminación (por ejemplo, tiempo máximo alcanzado)
         terminated = False  # Por ahora, no tenemos una condición de terminación
-
-        # Si se está utilizando renderizado, actualiza la visualización del entorno
-        #if self.render_mode == "human":
-        #    self.render()
 
         return observation, reward, terminated, False, info
 
