@@ -8,7 +8,7 @@ from scipy.stats import pareto
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     
-    def __init__(self, render_mode=None, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, n_ciclos=200):
+    def __init__(self, render_mode=None, seed=0, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, n_ciclos=200):
         self.num_ont = num_ont #numero de ont(unidades opticas)
         self.v_max_olt = v_max_olt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
@@ -28,7 +28,7 @@ class RedesOpticasEnv(gym.Env):
         self.trafico_pareto_actual = []  #Guardar el trafico pareto actual
         self.trafico_pendiente = np.zeros(self.num_ont)  # Inicializar el tráfico pendiente para cada ONT
 
-        self.rng = np.random.default_rng()  # Inicializa el generador de números aleatorios
+        self.rng = np.random.default_rng(seed)  # Inicializa el generador de números aleatorios
         
         #Variable propia de este escenario donde se cambia el funcionamiento del algoritmo
         self.instantes=0
@@ -118,16 +118,13 @@ class RedesOpticasEnv(gym.Env):
                 # Asegurarse de que el tráfico de salida en el siguiente ciclo considera el tráfico pendiente
                 self.trafico_salida[i] = min(self.trafico_pendiente[i], self.Max_bits_ONT)
                 self.trafico_pendiente[i] -= self.trafico_salida[i]
-                # Asegurarse de que el tráfico pendiente no sea negativo
-                #self.trafico_pendiente[i] = max(self.trafico_pendiente[i], 0)
 
 
         # Asegurarse de que la suma del tráfico de salida no supere la capacidad del OLT
         if np.sum(self.trafico_salida) > self.OLT_Capacity:
             exceso = np.sum(self.trafico_salida) - self.OLT_Capacity
             self.trafico_salida -= (exceso / self.num_ont)  # Distribuir el exceso entre todas las ONTs
-            #self.trafico_salida = np.clip(self.trafico_salida, 0, self.Max_bits_ONT)
-
+            
         # Calcular recompensa
         reward = self._calculate_reward()
 

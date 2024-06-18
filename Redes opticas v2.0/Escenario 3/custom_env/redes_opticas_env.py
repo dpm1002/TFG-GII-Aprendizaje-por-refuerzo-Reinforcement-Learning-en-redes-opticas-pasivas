@@ -9,12 +9,12 @@ import random
 class RedesOpticasEnv(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     
-    def __init__(self, render_mode=None, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, n_ciclos=200):
+    def __init__(self, render_mode=None,seed=0, num_ont=3, v_max_olt=10e6, vt_contratada=10e6/10, n_ciclos=200):
         self.num_ont = num_ont #numero de ont(unidades opticas)
         self.v_max_olt = v_max_olt  # bits por segundo (bps)
         self.temp_ciclo = 0.002  # segundos (s)
         self.OLT_Capacity = v_max_olt * self.temp_ciclo  # bits
-        #Velocidad de transmision contratada, lo ponemos a 1/10 del Vt de la OLT inicialmente
+        #Velocidad de transmision contratada
         self.velocidadContratada = vt_contratada
         #Velocidad de transmision contratada auxiliar
         self.velocidadContratadaAuxiliar = self.velocidadContratada
@@ -37,7 +37,7 @@ class RedesOpticasEnv(gym.Env):
         #Variable con la que decimos el numero de ciclos del algoritmo
         self.n_ciclos=n_ciclos-1
 
-        self.rng = np.random.default_rng()  # Inicializa el generador de números aleatorios
+        self.rng = np.random.default_rng(seed)  # Inicializa el generador de números aleatorios
 
         self.state = None
         self.reset()
@@ -108,7 +108,6 @@ class RedesOpticasEnv(gym.Env):
     def step(self, action):
         #En este escenario, cuando el programa lleve 100 ciclos cambiará su funcionamiento de programa
         if self.instantes==100:
-            a=self.velocidadContratadaAuxiliar/1000
             self.velocidadContratadaAuxiliar=4000000000
             self.Max_bits_ONT=self.velocidadContratadaAuxiliar*self.temp_ciclo
 
@@ -128,8 +127,6 @@ class RedesOpticasEnv(gym.Env):
                 # Asegurarse de que el tráfico de salida en el siguiente ciclo considera el tráfico pendiente
                 self.trafico_salida[i] = min(self.trafico_pendiente[i], self.Max_bits_ONT)
                 self.trafico_pendiente[i] -= self.trafico_salida[i]
-                # Asegurarse de que el tráfico pendiente no sea negativo
-                #self.trafico_pendiente[i] = max(self.trafico_pendiente[i], 0)
 
 
         # Asegurarse de que la suma del tráfico de salida no supere la capacidad del OLT
