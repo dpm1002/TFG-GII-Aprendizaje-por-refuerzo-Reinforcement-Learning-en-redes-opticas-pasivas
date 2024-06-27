@@ -23,5 +23,3 @@ El codigo final es el mencionado de redes opticas, donde trabajaré con redes PO
 ![GitHub top language](https://img.shields.io/github/languages/top/dpm1002/TFG-GII-Aprendizaje-por-refuerzo-Reinforcement-Learning-en-redes-opticas-pasivas)
 
 ![Last Commit](https://img.shields.io/github/last-commit/dpm1002/TFG-GII-Aprendizaje-por-refuerzo-Reinforcement-Learning-en-redes-opticas-pasivas)
-
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=dpm1002_TFG-GII-Aprendizaje-por-refuerzo-Reinforcement-Learning-en-redes-opticas-pasivas&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=dpm1002_TFG-GII-Aprendizaje-por-refuerzo-Reinforcement-Learning-en-redes-opticas-pasivas)
