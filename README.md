@@ -7,7 +7,7 @@ Para este código primero he estado trabajando con códigos de aprendizaje de DR
 
 Una vez ya aprendido su funcionamiento realice un entorno de turbinas eolicas donde cree un entorno en python de DRL para la simulación de la maximizacion de energia.
 
-El codigo final es el mencionado de redes opticas, donde trabajaré con redes PON y con los algoritmos DBA de polling. En este caso el objetivo es que el ancho de banda de las diferentes onus de cada red SLA cumpla los objetivos de acercarse lo maximo posible al ancho de banda garantizado de la red SLA.
+El codigo final es el mencionado de redes opticas v2.0, donde trabajaré con redes PON y con los algoritmos DBA de polling. En este caso el objetivo es que el ancho de banda de las diferentes onus de cada red SLA cumpla los objetivos de acercarse lo maximo posible al ancho de banda garantizado de la red SLA generando el trafico de entrada con la distribución de Pareto.
 
 
 
