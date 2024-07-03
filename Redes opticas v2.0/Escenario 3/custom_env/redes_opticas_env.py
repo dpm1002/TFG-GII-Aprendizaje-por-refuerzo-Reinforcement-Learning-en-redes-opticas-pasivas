@@ -108,7 +108,7 @@ class RedesOpticasEnv(gym.Env):
     def step(self, action):
         #En este escenario, cuando el programa lleve 100 ciclos cambiará su funcionamiento de programa
         if self.instantes==100:
-            self.velocidadContratadaAuxiliar=4000000000
+            self.velocidadContratadaAuxiliar=400e6
             self.Max_bits_ONT=self.velocidadContratadaAuxiliar*self.temp_ciclo
 
 
